@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Timeline</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent !important;
+    overflow: hidden;
+    height: 550px;
+    width: 80%;
+    margin: auto;
+    transition: width 0.3s ease;
+  }
+  body.zoomed {
+    width: 120%;
+    margin-left: -64px;
+  }
+  #viewer-wrapper {
+    width: 100%;
+    height: 1080px;
+    max-height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: transparent;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(120,120,120,0.4) transparent;
+  }
+  #viewer-wrapper::-webkit-scrollbar {
+    width: 6px;
+  }
+  #viewer-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #viewer-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(120,120,120,0.4);
+    border-radius: 3px;
+  }
+  #viewer-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(120,120,120,0.6);
+  }
+  #pdf-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    padding: 0;
+    background: transparent;
+  }
+  #pdf-container canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: transparent;
+    cursor: zoom-in;
+  }
+  body.zoomed #pdf-container canvas {
+    cursor: zoom-out;
+  }
+  #loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    width: 100%;
+    color: #888;
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(120,120,120,0.2);
+    border-top-color: rgba(120,120,120,0.6);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+<div id="viewer-wrapper">
+  <div id="pdf-container">
+    <div id="loading"><div class="spinner"></div>Loading timeline…</div>
+  </div>
+</div>
+
+<script type="module">
+const PDF_URL = 'https://yorulingo.s3.us-east-1.amazonaws.com/Yorulingo+Week+1+-+Compressed.pdf';
+const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+const container = document.getElementById('pdf-container');
+const wrapper = document.getElementById('viewer-wrapper');
+
+// Click any page to toggle the viewer between 80% and 100% width
+function toggleZoom() {
+  document.body.classList.toggle('zoomed');
+}
+
+try {
+  const pdf = await pdfjsLib.getDocument(PDF_URL).promise;
+  const numPages = pdf.numPages;
+  // Remove loading indicator
+  document.getElementById('loading').remove();
+  // Render scale: use container width for crisp rendering
+  const RENDER_SCALE = 2; // 2x for retina clarity
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1 });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    // Size canvas at render scale for sharpness
+    const containerWidth = wrapper.clientWidth || 960;
+    const scale = (containerWidth * RENDER_SCALE) / viewport.width;
+    const scaledViewport = page.getViewport({ scale });
+    canvas.width = scaledViewport.width;
+    canvas.height = scaledViewport.height;
+    // CSS scales it back down to container width
+    canvas.style.width = '100%';
+    canvas.style.height = 'auto';
+    container.appendChild(canvas);
+    await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+
+    // Click this page's canvas to toggle zoom
+    canvas.addEventListener('click', toggleZoom);
+  }
+} catch (err) {
+  document.getElementById('loading').innerHTML =
+    '<span style="color:#c44;">Failed to load PDF. Check the URL or try refreshing.</span>';
+  console.error('PDF load error:', err);
+}
+</script>
+</body>
+</html>
